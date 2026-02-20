@@ -3,10 +3,10 @@ import { GoogleGenAI } from "@google/genai";
 export async function generateImage(
   prompt: string
 ): Promise<{ imageUrl: string; base64: string } | null> {
-  const apiKey = process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'undefined' 
-    ? process.env.GEMINI_API_KEY 
-    : 'AIzaSyDsn-UP2oLLmPeFw7R0cqeoRiuzKyGHZlc';
-    
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey === 'undefined') {
+    throw new Error("Chiave API mancante. Assicurati che GEMINI_API_KEY sia configurata nelle variabili d'ambiente.");
+  }
   const ai = new GoogleGenAI({ apiKey });
   
   try {
@@ -65,10 +65,10 @@ export async function editImage(
   mimeType: string,
   prompt: string
 ): Promise<{ imageUrl: string; base64: string } | null> {
-  const apiKey = process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'undefined' 
-    ? process.env.GEMINI_API_KEY 
-    : 'AIzaSyDsn-UP2oLLmPeFw7R0cqeoRiuzKyGHZlc';
-
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey === 'undefined') {
+    throw new Error("Chiave API mancante. Assicurati che GEMINI_API_KEY sia configurata nelle variabili d'ambiente.");
+  }
   const ai = new GoogleGenAI({ apiKey });
   
   // Strip data URL prefix if present
