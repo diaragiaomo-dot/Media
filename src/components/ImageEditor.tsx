@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useDropzone, DropzoneOptions } from 'react-dropzone';
-import { Upload, Wand2, Download, RefreshCw, Image as ImageIcon, X, Check, PlusCircle } from 'lucide-react';
+import { Upload, Wand2, Download, RefreshCw, Image as ImageIcon, X, Check, PlusCircle, Share2, Copy, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { editImage, generateImage } from '../services/gemini';
 import confetti from 'canvas-confetti';
@@ -14,8 +14,74 @@ export default function ImageEditor() {
   const [editedImage, setEditedImage] = useState<{ url: string; base64: string } | null>(null);
   const [prompt, setPrompt] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [exportFormat, setExportFormat] = useState<ExportFormat>('image/png');
+
+  // Check for shared image on mount
+  useEffect(() => {
+    const pathParts = window.location.pathname.split('/');
+    const shareId = pathParts[pathParts.length - 1];
+    if (window.location.pathname.startsWith('/share/') && shareId) {
+      fetchSharedImage(shareId);
+    }
+  }, []);
+
+  const fetchSharedImage = async (id: string) => {
+    setIsProcessing(true);
+    try {
+      const res = await fetch(`/api/images/${id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setEditedImage({
+          url: `data:${data.mimeType};base64,${data.data}`,
+          base64: data.data
+        });
+      } else {
+        setError("Immagine condivisa non trovata.");
+      }
+    } catch (err) {
+      setError("Errore nel caricamento dell'immagine condivisa.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleShare = async () => {
+    const imageToShare = editedImage || originalImage;
+    if (!imageToShare) return;
+
+    setIsSharing(true);
+    try {
+      const res = await fetch('/api/images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          data: imageToShare.base64,
+          mimeType: originalImage?.type || 'image/png'
+        })
+      });
+      if (res.ok) {
+        const { id } = await res.json();
+        const url = `${window.location.origin}/share/${id}`;
+        setShareUrl(url);
+      } else {
+        setError("Impossibile generare il link di condivisione.");
+      }
+    } catch (err) {
+      setError("Errore durante la condivisione.");
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+  const copyToClipboard = () => {
+    if (shareUrl) {
+      navigator.clipboard.writeText(shareUrl);
+      alert("Link copiato negli appunti!");
+    }
+  };
 
   const onDrop = (acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -106,6 +172,12 @@ export default function ImageEditor() {
 
   return (
     <div className="min-h-screen bg-[#F5F5F5] text-[#1A1A1A] font-sans p-4 md:p-8">
+      {(!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === 'undefined') && (
+        <div className="max-w-6xl mx-auto mb-4 p-4 bg-red-100 border border-red-200 text-red-700 rounded-xl text-xs font-bold flex items-center gap-2">
+          <X size={16} />
+          ATTENZIONE: Chiave API non configurata. Aggiungi GEMINI_API_KEY nelle variabili d'ambiente di Vercel.
+        </div>
+      )}
       <header className="max-w-6xl mx-auto mb-12 flex justify-between items-end border-b border-black/10 pb-6">
         <div>
           <h1 className="text-5xl font-bold tracking-tighter uppercase italic">ImagiEdit AI</h1>
@@ -236,9 +308,9 @@ export default function ImageEditor() {
               </div>
               <button
                 onClick={downloadImage}
-                disabled={!originalImage || isProcessing}
+                disabled={!originalImage && !editedImage || isProcessing}
                 className={`w-full py-4 rounded-xl flex items-center justify-center gap-2 font-bold border-2 border-black transition-all ${
-                  !originalImage || isProcessing
+                  !originalImage && !editedImage || isProcessing
                     ? 'opacity-20 cursor-not-allowed'
                     : 'hover:bg-black hover:text-white'
                 }`}
@@ -246,6 +318,52 @@ export default function ImageEditor() {
                 <Download size={20} />
                 <span>SCARICA IMMAGINE</span>
               </button>
+
+              <div className="pt-4 border-t border-black/5">
+                <button
+                  onClick={handleShare}
+                  disabled={!originalImage && !editedImage || isProcessing || isSharing}
+                  className={`w-full py-3 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all ${
+                    !originalImage && !editedImage || isProcessing || isSharing
+                      ? 'bg-black/5 text-black/20 cursor-not-allowed'
+                      : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                  }`}
+                >
+                  {isSharing ? <RefreshCw className="animate-spin" size={16} /> : <Share2 size={16} />}
+                  <span>GENERA LINK CONDIVISIONE</span>
+                </button>
+
+                <AnimatePresence>
+                  {shareUrl && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="mt-3 space-y-2 overflow-hidden"
+                    >
+                      <div className="flex items-center gap-2 p-2 bg-[#F9F9F9] rounded-lg border border-black/5">
+                        <input 
+                          readOnly 
+                          value={shareUrl} 
+                          className="flex-1 bg-transparent text-[10px] font-mono outline-none"
+                        />
+                        <button onClick={copyToClipboard} className="p-1 hover:bg-black/5 rounded">
+                          <Copy size={14} />
+                        </button>
+                      </div>
+                      <a 
+                        href={shareUrl} 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="flex items-center justify-center gap-1 text-[10px] font-bold text-indigo-600 hover:underline"
+                      >
+                        <ExternalLink size={10} />
+                        APRI IN NUOVA SCHEDA
+                      </a>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
           </section>
         </div>

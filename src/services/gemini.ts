@@ -3,7 +3,11 @@ import { GoogleGenAI } from "@google/genai";
 export async function generateImage(
   prompt: string
 ): Promise<{ imageUrl: string; base64: string } | null> {
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey === 'undefined') {
+    throw new Error("Chiave API mancante. Configura GEMINI_API_KEY nelle impostazioni di Vercel.");
+  }
+  const ai = new GoogleGenAI({ apiKey });
   
   try {
     console.log("Generating image with prompt:", prompt);
@@ -12,20 +16,32 @@ export async function generateImage(
       contents: {
         parts: [
           {
-            text: prompt,
+            text: `GENERATE_IMAGE: ${prompt}`,
           },
         ],
       },
+      config: {
+        systemInstruction: "You are an image generation model. Your task is to generate high-quality images based on the user's prompt. Do not respond with text unless you absolutely cannot generate the image.",
+        imageConfig: {
+          aspectRatio: "1:1"
+        }
+      }
     });
 
     console.log("Gemini generation response received:", response);
 
     if (!response.candidates || response.candidates.length === 0) {
-      console.error("No candidates in response");
-      return null;
+      throw new Error("L'IA non ha prodotto alcun risultato. Riprova con un prompt diverso.");
     }
 
-    for (const part of response.candidates[0].content.parts || []) {
+    const candidate = response.candidates[0];
+    
+    // Check for safety ratings if possible
+    if (candidate.finishReason === 'SAFETY') {
+      throw new Error("La richiesta è stata bloccata dai filtri di sicurezza dell'IA. Prova a cambiare le parole del prompt.");
+    }
+
+    for (const part of candidate.content.parts || []) {
       if (part.inlineData) {
         const base64 = part.inlineData.data;
         return {
@@ -37,10 +53,10 @@ export async function generateImage(
     
     if (response.text) {
       console.warn("Gemini returned text instead of an image:", response.text);
-      throw new Error(`L'IA ha risposto con del testo invece di un'immagine: ${response.text}`);
+      throw new Error(`L'IA ha risposto con del testo invece di generare l'immagine: "${response.text.substring(0, 100)}..."`);
     }
 
-    return null;
+    throw new Error("Impossibile trovare i dati dell'immagine nella risposta dell'IA.");
   } catch (error: any) {
     console.error("Error generating image:", error);
     throw error;
@@ -52,7 +68,11 @@ export async function editImage(
   mimeType: string,
   prompt: string
 ): Promise<{ imageUrl: string; base64: string } | null> {
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey === 'undefined') {
+    throw new Error("Chiave API mancante. Configura GEMINI_API_KEY nelle impostazioni di Vercel.");
+  }
+  const ai = new GoogleGenAI({ apiKey });
   
   try {
     console.log("Sending request to Gemini with prompt:", prompt);
@@ -67,10 +87,16 @@ export async function editImage(
             },
           },
           {
-            text: prompt,
+            text: `MODIFY_IMAGE: ${prompt}`,
           },
         ],
       },
+      config: {
+        systemInstruction: "You are an image editing model. Your task is to modify the provided image according to the user's request. Do not respond with text.",
+        imageConfig: {
+          aspectRatio: "1:1"
+        }
+      }
     });
 
     console.log("Gemini response received:", response);
