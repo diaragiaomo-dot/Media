@@ -16,12 +16,11 @@ export async function generateImage(
       contents: {
         parts: [
           {
-            text: `GENERATE_IMAGE: ${prompt}`,
+            text: prompt,
           },
         ],
       },
       config: {
-        systemInstruction: "You are an image generation model. Your task is to generate high-quality images based on the user's prompt. Do not respond with text unless you absolutely cannot generate the image.",
         imageConfig: {
           aspectRatio: "1:1"
         }
@@ -36,9 +35,8 @@ export async function generateImage(
 
     const candidate = response.candidates[0];
     
-    // Check for safety ratings if possible
     if (candidate.finishReason === 'SAFETY') {
-      throw new Error("La richiesta è stata bloccata dai filtri di sicurezza dell'IA. Prova a cambiare le parole del prompt.");
+      throw new Error("La richiesta è stata bloccata dai filtri di sicurezza. Prova a usare termini più generici.");
     }
 
     for (const part of candidate.content.parts || []) {
@@ -52,11 +50,10 @@ export async function generateImage(
     }
     
     if (response.text) {
-      console.warn("Gemini returned text instead of an image:", response.text);
-      throw new Error(`L'IA ha risposto con del testo invece di generare l'immagine: "${response.text.substring(0, 100)}..."`);
+      throw new Error(`L'IA ha risposto con del testo invece di un'immagine: "${response.text.substring(0, 100)}..."`);
     }
 
-    throw new Error("Impossibile trovare i dati dell'immagine nella risposta dell'IA.");
+    throw new Error("Nessuna immagine trovata nella risposta.");
   } catch (error: any) {
     console.error("Error generating image:", error);
     throw error;
@@ -74,6 +71,9 @@ export async function editImage(
   }
   const ai = new GoogleGenAI({ apiKey });
   
+  // Strip data URL prefix if present
+  const cleanBase64 = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
+  
   try {
     console.log("Sending request to Gemini with prompt:", prompt);
     const response = await ai.models.generateContent({
@@ -82,17 +82,16 @@ export async function editImage(
         parts: [
           {
             inlineData: {
-              data: base64Image,
+              data: cleanBase64,
               mimeType: mimeType,
             },
           },
           {
-            text: `MODIFY_IMAGE: ${prompt}`,
+            text: prompt,
           },
         ],
       },
       config: {
-        systemInstruction: "You are an image editing model. Your task is to modify the provided image according to the user's request. Do not respond with text.",
         imageConfig: {
           aspectRatio: "1:1"
         }
