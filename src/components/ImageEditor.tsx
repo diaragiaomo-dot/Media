@@ -172,12 +172,6 @@ export default function ImageEditor() {
 
   return (
     <div className="min-h-screen bg-[#F5F5F5] text-[#1A1A1A] font-sans p-4 md:p-8">
-      {(!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === 'undefined') && (
-        <div className="max-w-6xl mx-auto mb-4 p-4 bg-red-100 border border-red-200 text-red-700 rounded-xl text-xs font-bold flex items-center gap-2">
-          <X size={16} />
-          ATTENZIONE: Chiave API non configurata. Aggiungi GEMINI_API_KEY nelle variabili d'ambiente di Vercel.
-        </div>
-      )}
       <header className="max-w-6xl mx-auto mb-12 flex justify-between items-end border-b border-black/10 pb-6">
         <div>
           <h1 className="text-5xl font-bold tracking-tighter uppercase italic">ImagiEdit AI</h1>
